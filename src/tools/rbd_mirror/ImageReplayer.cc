@@ -823,17 +823,20 @@ void ImageReplayer<I>::replay_flush() {
 
   // shut down the replay to flush all IO and ops and create a new
   // replayer to handle the new tag epoch
-  Context *ctx = create_context_callback<
+  Context *start_ctx = create_context_callback<
     ImageReplayer<I>, &ImageReplayer<I>::handle_replay_flush>(this);
-  ctx = new FunctionContext([this, ctx](int r) {
+  Context *stop_ctx = create_context_callback<
+    ImageReplayer, &ImageReplayer<I>::handle_stop_replay_request>(this);
+  Context *ctx = new FunctionContext([this, start_ctx, stop_ctx](int r) {
       m_local_image_ctx->journal->stop_external_replay();
       m_local_replay = nullptr;
 
       if (r < 0) {
-        ctx->complete(r);
+        start_ctx->complete(r);
         return;
       }
-      m_local_image_ctx->journal->start_external_replay(&m_local_replay, ctx);
+      m_local_image_ctx->journal->start_external_replay(&m_local_replay,
+							start_ctx, stop_ctx);
     });
   m_local_replay->shut_down(true, ctx);
 }
