@@ -797,26 +797,34 @@ private:
   int _rename(Inode *olddir, const char *oname, Inode *ndir, const char *nname, const UserPerm& perm);
   int _mkdir(Inode *dir, const char *name, mode_t mode, const UserPerm& perm,
 	     InodeRef *inp = 0);
-  int _rmdir(Inode *dir, const char *name, int uid=-1, int gid=-1);
-  int _symlink(Inode *dir, const char *name, const char *target, int uid=-1, int gid=-1, InodeRef *inp = 0);
-  int _mknod(Inode *dir, const char *name, mode_t mode, dev_t rdev, int uid=-1, int gid=-1, InodeRef *inp = 0);
+  int _rmdir(Inode *dir, const char *name, const UserPerm& perms);
+  int _symlink(Inode *dir, const char *name, const char *target,
+	       const UserPerm& perms, InodeRef *inp = 0);
+  int _mknod(Inode *dir, const char *name, mode_t mode, dev_t rdev,
+	     const UserPerm& perms, InodeRef *inp = 0);
   int _do_setattr(Inode *in, struct ceph_statx *stx, int mask, int uid, int gid, InodeRef *inp);
   void stat_to_statx(struct stat *st, struct ceph_statx *stx);
-  int __setattrx(Inode *in, struct ceph_statx *stx, int mask, int uid=-1, int gid=-1, InodeRef *inp = 0);
+  int __setattrx(Inode *in, struct ceph_statx *stx, int mask, int uid=-1, int gid=-1, InodeRef *inp=0);
+  int __setattrx(Inode *in, struct ceph_statx *stx, int mask, const UserPerm& perms, InodeRef *inp) {
+    return __setattrx(in, stx, mask, perms.uid(), perms.gid(), inp);
+  }
   int _setattrx(InodeRef &in, struct ceph_statx *stx, int mask);
   int _setattr(Inode *in, struct stat *attr, int mask, const UserPerm& perms,
 	       InodeRef *inp = 0) {
     return _setattr(in, attr, mask, perms, inp);
   }
   int _setattr(InodeRef &in, struct stat *attr, int mask);
-  int _ll_setattrx(Inode *in, struct ceph_statx *stx, int mask, int uid = -1,
-		 int gid = -1, InodeRef *inp = 0);
+  int _ll_setattrx(Inode *in, struct ceph_statx *stx, int mask,
+		   const UserPerm& perms, InodeRef *inp = 0);
   int _getattr(Inode *in, int mask, int uid=-1, int gid=-1, bool force=false);
   int _getattr(InodeRef &in, int mask, int uid=-1, int gid=-1, bool force=false) {
     return _getattr(in.get(), mask, uid, gid, force);
   }
   int _getattr(InodeRef &in, int mask, const UserPerm& perms, bool force=false) {
     return _getattr(in, mask, perms, force);
+  }
+  int _getattr(Inode *in, int mask, const UserPerm& perms, bool force=false) {
+    return _getattr(in, mask, perms.uid(), perms.gid(), force);
   }
   int _readlink(Inode *in, char *buf, size_t size);
   int _getxattr(Inode *in, const char *name, void *value, size_t len,
@@ -1004,7 +1012,7 @@ private:
 
   mds_rank_t _get_random_up_mds() const;
 
-  int _ll_getattr(Inode *in, int uid, int gid);
+  int _ll_getattr(Inode *in, const UserPerm& perms);
 
 public:
   int mount(const std::string &mount_root, bool require_mds=false);
@@ -1179,32 +1187,31 @@ public:
 		Inode **out, const UserPerm& perms);
   bool ll_forget(Inode *in, int count);
   bool ll_put(Inode *in);
-  int ll_getattr(Inode *in, struct stat *st, int uid = -1, int gid = -1);
+  int ll_getattr(Inode *in, struct stat *st, const UserPerm& perms);
   int ll_getattrx(Inode *in, struct ceph_statx *stx, unsigned int want,
-		  unsigned int flags, int uid = -1, int gid = -1);
-  int ll_setattrx(Inode *in, struct ceph_statx *stx, int mask, int uid = -1,
-		 int gid = -1);
-  int ll_setattr(Inode *in, struct stat *st, int mask, int uid = -1,
-		 int gid = -1);
+		  unsigned int flags, const UserPerm& perms);
+  int ll_setattr(Inode *in, struct stat *st, int mask, const UserPerm& perms);
+  int ll_setattrx(Inode *in, struct ceph_statx *stx, int mask,
+		  const UserPerm& perms);
   int ll_getxattr(Inode *in, const char *name, void *value, size_t size,
-		  int uid=-1, int gid=-1);
+		  const UserPerm& perms);
   int ll_setxattr(Inode *in, const char *name, const void *value, size_t size,
-		  int flags, int uid=-1, int gid=-1);
-  int ll_removexattr(Inode *in, const char *name, int uid=-1, int gid=-1);
-  int ll_listxattr(Inode *in, char *list, size_t size, int uid=-1, int gid=-1);
+		  int flags, const UserPerm& perms);
+  int ll_removexattr(Inode *in, const char *name, const UserPerm& perms);
+  int ll_listxattr(Inode *in, char *list, size_t size, const UserPerm& perms);
   int ll_opendir(Inode *in, int flags, dir_result_t **dirpp,
 		 const UserPerm& perms);
   int ll_releasedir(dir_result_t* dirp);
   int ll_fsyncdir(dir_result_t* dirp);
-  int ll_readlink(Inode *in, char *buf, size_t bufsize, int uid = -1, int gid = -1);
+  int ll_readlink(Inode *in, char *buf, size_t bufsize, const UserPerm& perms);
   int ll_mknod(Inode *in, const char *name, mode_t mode, dev_t rdev,
-	       struct stat *attr, Inode **out, int uid = -1, int gid = -1);
+	       struct stat *attr, Inode **out, const UserPerm& perms);
   int ll_mkdir(Inode *in, const char *name, mode_t mode, struct stat *attr,
 	       Inode **out, const UserPerm& perm);
   int ll_symlink(Inode *in, const char *name, const char *value,
-		 struct stat *attr, Inode **out, int uid = -1, int gid = -1);
+		 struct stat *attr, Inode **out, const UserPerm& perms);
   int ll_unlink(Inode *in, const char *name, const UserPerm& perm);
-  int ll_rmdir(Inode *in, const char *name, int uid = -1, int gid = -1);
+  int ll_rmdir(Inode *in, const char *name, const UserPerm& perms);
   int ll_rename(Inode *parent, const char *name, Inode *newparent,
 		const char *newname, const UserPerm& perm);
   int ll_link(Inode *in, Inode *newparent, const char *newname,
