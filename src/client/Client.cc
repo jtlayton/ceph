@@ -6273,7 +6273,7 @@ int Client::mkdirs(const char *relpath, mode_t mode)
   tout(cct) << relpath << std::endl;
   tout(cct) << mode << std::endl;
 
-  UserPerm perms = pick_my_perms();
+  UserPerm perms(get_uid(), get_gid());
 
   //get through existing parts of path
   filepath path(relpath);
@@ -6325,7 +6325,7 @@ int Client::rmdir(const char *relpath)
   string name = path.last_dentry();
   path.pop_dentry();
   InodeRef dir;
-  UserPerm perms = pick_my_perms();
+  UserPerm perms(get_uid(), get_gid());
   int r = path_walk(path, &dir, perms);
   if (r < 0)
     return r;
@@ -6348,7 +6348,7 @@ int Client::mknod(const char *relpath, mode_t mode, dev_t rdev)
   string name = path.last_dentry();
   path.pop_dentry();
   InodeRef dir;
-  UserPerm perms = pick_my_perms();
+  UserPerm perms(get_uid(), get_gid());
   int r = path_walk(path, &dir, perms);
   if (r < 0)
     return r;
@@ -6373,7 +6373,7 @@ int Client::symlink(const char *target, const char *relpath)
   string name = path.last_dentry();
   path.pop_dentry();
   InodeRef dir;
-  UserPerm perms = pick_my_perms();
+  UserPerm perms(get_uid(), get_gid());
   int r = path_walk(path, &dir, perms);
   if (r < 0)
     return r;
