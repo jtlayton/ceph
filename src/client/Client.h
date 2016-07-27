@@ -804,13 +804,20 @@ private:
 	     const UserPerm& perms, InodeRef *inp = 0);
   int _do_setattr(Inode *in, struct ceph_statx *stx, int mask, const UserPerm& perms, InodeRef *inp);
   void stat_to_statx(struct stat *st, struct ceph_statx *stx);
-  int __setattrx(Inode *in, struct ceph_statx *stx, int mask, const UserPerm& perms, InodeRef *inp);
-  int _setattrx(InodeRef &in, struct ceph_statx *stx, int mask);
-  int _setattr(Inode *in, struct stat *attr, int mask, const UserPerm& perms,
-	       InodeRef *inp = 0) {
-    return _setattr(in, attr, mask, perms, inp);
+  int __setattrx(Inode *in, struct ceph_statx *stx, int mask, const UserPerm& perms, InodeRef *inp=0);
+  int _setattrx(Inode *in, struct ceph_statx *stx, int mask, const UserPerm& perms);
+  int _setattr(Inode *in, struct stat *attr, int mask, int uid=-1, int gid=-1) {
+    UserPerm perms(uid, gid);
+    return _setattr(in, attr, mask, perms);
   }
-  int _setattr(InodeRef &in, struct stat *attr, int mask);
+  int _setattr(Inode *in, struct stat *attr, int mask, const UserPerm& perms);
+  int _setattr(InodeRef &in, struct stat *attr, int mask, const UserPerm& perms) {
+    return _setattr(in.get(), attr, mask, perms);
+  }
+  int _setattr(InodeRef &in, struct stat *attr, int mask) {
+    UserPerm perms(get_uid(), get_gid());
+    return _setattr(in, attr, mask, perms);
+  }
   int _ll_setattrx(Inode *in, struct ceph_statx *stx, int mask,
 		   const UserPerm& perms, InodeRef *inp = 0);
   int _getattr(Inode *in, int mask, int uid=-1, int gid=-1, bool force=false);
@@ -1076,9 +1083,9 @@ public:
   int lstat(const char *path, struct stat *stbuf, frag_info_t *dirstat=0, int mask=CEPH_STAT_CAP_INODE_ALL);
   int lstatlite(const char *path, struct statlite *buf);
 
-  int setattr(const char *relpath, struct stat *attr, int mask);
-  int setattrx(const char *relpath, struct ceph_statx *stx, int mask, int flags=0);
-  int fsetattr(int fd, struct stat *attr, int mask);
+  int setattr(const char *relpath, struct stat *attr, int mask, const UserPerm& perms);
+  int setattrx(const char *relpath, struct ceph_statx *stx, int mask, int flags, const UserPerm& perms);
+  int fsetattr(int fd, struct stat *attr, int mask, const UserPerm& perms);
   int chmod(const char *path, mode_t mode);
   int fchmod(int fd, mode_t mode);
   int lchmod(const char *path, mode_t mode);

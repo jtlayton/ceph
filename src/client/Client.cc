@@ -6628,31 +6628,33 @@ int Client::__setattrx(Inode *in, struct ceph_statx *stx, int mask,
   return ret;
 }
 
-int Client::_setattrx(InodeRef &in, struct ceph_statx *stx, int mask)
+int Client::_setattrx(Inode *in, struct ceph_statx *stx, int mask,
+		      const UserPerm& perms)
 {
   mask &= (CEPH_SETATTR_MODE | CEPH_SETATTR_UID |
 	   CEPH_SETATTR_GID | CEPH_SETATTR_MTIME |
 	   CEPH_SETATTR_ATIME | CEPH_SETATTR_SIZE |
 	   CEPH_SETATTR_CTIME | CEPH_SETATTR_BTIME);
   if (cct->_conf->client_permissions) {
-    int r = may_setattr(in.get(), stx, mask);
+    int r = may_setattr(in, stx, mask, perms);
     if (r < 0)
       return r;
   }
-  UserPerm perms = pick_my_perms(); // FIXME
-  return __setattrx(in.get(), stx, mask, perms, NULL);
+  return __setattrx(in, stx, mask, perms);
 }
 
-int Client::_setattr(InodeRef &in, struct stat *attr, int mask)
+int Client::_setattr(Inode *in, struct stat *attr, int mask,
+		     const UserPerm& perms)
 {
   struct ceph_statx stx;
 
   stat_to_statx(attr, &stx);
   mask &= ~CEPH_SETATTR_BTIME;
-  return _setattrx(in, &stx, mask);
+  return _setattrx(in, &stx, mask, perms);
 }
 
-int Client::setattr(const char *relpath, struct stat *attr, int mask)
+int Client::setattr(const char *relpath, struct stat *attr, int mask,
+		    const UserPerm& perms)
 {
   Mutex::Locker lock(client_lock);
   tout(cct) << "setattr" << std::endl;
@@ -6661,13 +6663,14 @@ int Client::setattr(const char *relpath, struct stat *attr, int mask)
 
   filepath path(relpath);
   InodeRef in;
-  int r = path_walk(path, &in);
+  int r = path_walk(path, &in, perms);
   if (r < 0)
     return r;
-  return _setattr(in, attr, mask);
+  return _setattr(in.get(), attr, mask, perms);
 }
 
-int Client::setattrx(const char *relpath, struct ceph_statx *stx, int mask, int flags)
+int Client::setattrx(const char *relpath, struct ceph_statx *stx, int mask,
+		     int flags, const UserPerm& perms)
 {
   Mutex::Locker lock(client_lock);
   tout(cct) << "setattrx" << std::endl;
@@ -6679,10 +6682,11 @@ int Client::setattrx(const char *relpath, struct ceph_statx *stx, int mask, int 
   int r = path_walk(path, &in, flags & AT_SYMLINK_NOFOLLOW);
   if (r < 0)
     return r;
-  return _setattrx(in, stx, mask);
+  return _setattrx(in.get(), stx, mask, perms);
 }
 
-int Client::fsetattr(int fd, struct stat *attr, int mask)
+int Client::fsetattr(int fd, struct stat *attr, int mask,
+		     const UserPerm& perms)
 {
   Mutex::Locker lock(client_lock);
   tout(cct) << "fsetattr" << std::endl;
@@ -6696,7 +6700,7 @@ int Client::fsetattr(int fd, struct stat *attr, int mask)
   if (f->flags & O_PATH)
     return -EBADF;
 #endif
-  return _setattr(f->inode, attr, mask);
+  return _setattr(f->inode, attr, mask, perms);
 }
 
 int Client::stat(const char *relpath, struct stat *stbuf,
@@ -8904,7 +8908,9 @@ int Client::truncate(const char *relpath, loff_t length)
 {
   struct ceph_statx stx;
   stx.stx_size = length;
-  return setattrx(relpath, &stx, CEPH_SETATTR_SIZE);
+  // FIXME
+  UserPerm perms(get_uid(), get_gid());
+  return setattrx(relpath, &stx, CEPH_SETATTR_SIZE, 0, perms);
 }
 
 int Client::ftruncate(int fd, loff_t length) 
