@@ -804,6 +804,10 @@ private:
   void stat_to_statx(struct stat *st, struct ceph_statx *stx);
   int __setattrx(Inode *in, struct ceph_statx *stx, int mask, int uid=-1, int gid=-1, InodeRef *inp = 0);
   int _setattrx(InodeRef &in, struct ceph_statx *stx, int mask);
+  int _setattr(Inode *in, struct stat *attr, int mask, const UserPerm& perms,
+	       InodeRef *inp = 0) {
+    return _setattr(in, attr, mask, perms, inp);
+  }
   int _setattr(InodeRef &in, struct stat *attr, int mask);
   int _ll_setattrx(Inode *in, struct ceph_statx *stx, int mask, int uid = -1,
 		 int gid = -1, InodeRef *inp = 0);
@@ -811,14 +815,33 @@ private:
   int _getattr(InodeRef &in, int mask, int uid=-1, int gid=-1, bool force=false) {
     return _getattr(in.get(), mask, uid, gid, force);
   }
+  int _getattr(InodeRef &in, int mask, const UserPerm& perms, bool force=false) {
+    return _getattr(in, mask, perms, force);
+  }
   int _readlink(Inode *in, char *buf, size_t size);
-  int _getxattr(Inode *in, const char *name, void *value, size_t len, int uid=-1, int gid=-1);
+  int _getxattr(Inode *in, const char *name, void *value, size_t len,
+		int uid=-1, int gid=-1);
   int _getxattr(InodeRef &in, const char *name, void *value, size_t len);
+  int _getxattr(Inode *in, const char *name, void *value, size_t len,
+		const UserPerm& perms) {
+    return _getxattr(in, name, value, len, perms.uid(), perms.gid());
+  }
   int _listxattr(Inode *in, char *names, size_t len, int uid=-1, int gid=-1);
+  int _listxattr(Inode *in, char *names, size_t len, const UserPerm& perms) {
+    return _listxattr(in, names, len, perms.uid(), perms.gid());
+  }
   int _do_setxattr(Inode *in, const char *name, const void *value, size_t len, int flags, int uid, int gid);
-  int _setxattr(Inode *in, const char *name, const void *value, size_t len, int flags, int uid=-1, int gid=-1);
+  int _setxattr(Inode *in, const char *name, const void *value, size_t len,
+		int flags, int uid=-1, int gid=-1);
+  int _setxattr(Inode *in, const char *name, const void *value, size_t len,
+		int flags, const UserPerm& perms) {
+    return _setxattr(in, name, value, len, flags, perms.uid(), perms.gid());
+  }
   int _setxattr(InodeRef &in, const char *name, const void *value, size_t len, int flags);
   int _removexattr(Inode *in, const char *nm, int uid=-1, int gid=-1);
+  int _removexattr(Inode *in, const char *nm, const UserPerm& perms) {
+    return _removexattr(in, nm, perms.uid(), perms.gid());
+  }
   int _removexattr(InodeRef &in, const char *nm);
   int _open(Inode *in, int flags, mode_t mode, Fh **fhp, int uid, int gid);
   int _renew_caps(Inode *in);

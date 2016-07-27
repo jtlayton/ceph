@@ -10176,12 +10176,13 @@ int Client::_getxattr(Inode *in, const char *name, void *value, size_t size,
 
 int Client::_getxattr(InodeRef &in, const char *name, void *value, size_t size)
 {
+  UserPerm perms(0, 0); // FIXME
   if (cct->_conf->client_permissions) {
     int r = xattr_permission(in.get(), name, MAY_READ);
     if (r < 0)
       return r;
   }
-  return _getxattr(in.get(), name, value, size);
+  return _getxattr(in.get(), name, value, size, perms);
 }
 
 int Client::ll_getxattr(Inode *in, const char *name, void *value,
@@ -10196,8 +10197,9 @@ int Client::ll_getxattr(Inode *in, const char *name, void *value,
   tout(cct) << vino.ino.val << std::endl;
   tout(cct) << name << std::endl;
 
+  UserPerm perms(0, 0); // FIXME
   if (!cct->_conf->fuse_default_permissions) {
-    int r = xattr_permission(in, name, MAY_READ, uid, gid);
+    int r = xattr_permission(in, name, MAY_READ, perms);
     if (r < 0)
       return r;
   }
@@ -10365,7 +10367,8 @@ int Client::_setxattr(InodeRef &in, const char *name, const void *value,
     if (r < 0)
       return r;
   }
-  return _setxattr(in.get(), name, value, size, flags);
+  UserPerm perms(0, 0); // FIXME
+  return _setxattr(in.get(), name, value, size, flags, perms);
 }
 
 int Client::check_data_pool_exist(string name, string value, const OSDMap *osdmap)
@@ -10486,7 +10489,8 @@ int Client::_removexattr(InodeRef &in, const char *name)
     if (r < 0)
       return r;
   }
-  return _removexattr(in.get(), name);
+  UserPerm perms(0, 0); // FIXME
+  return _removexattr(in.get(), name, perms);
 }
 
 int Client::ll_removexattr(Inode *in, const char *name, int uid, int gid)
