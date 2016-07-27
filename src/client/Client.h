@@ -1164,7 +1164,7 @@ public:
 		       loff_t length, loff_t offset);
 
   int mksnap(const char *path, const char *name, const UserPerm& perm);
-  int rmsnap(const char *path, const char *name);
+  int rmsnap(const char *path, const char *name, const UserPerm& perm);
 
   // expose caps
   int get_caps_issued(int fd);
