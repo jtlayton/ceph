@@ -6703,8 +6703,8 @@ int Client::fsetattr(int fd, struct stat *attr, int mask,
   return _setattr(f->inode, attr, mask, perms);
 }
 
-int Client::stat(const char *relpath, struct stat *stbuf,
-			  frag_info_t *dirstat, int mask)
+int Client::stat(const char *relpath, struct stat *stbuf, const UserPerm& perms,
+		 frag_info_t *dirstat, int mask)
 {
   ldout(cct, 3) << "stat enter (relpath " << relpath << " mask " << mask << ")" << dendl;
   Mutex::Locker lock(client_lock);
@@ -6712,10 +6712,10 @@ int Client::stat(const char *relpath, struct stat *stbuf,
   tout(cct) << relpath << std::endl;
   filepath path(relpath);
   InodeRef in;
-  int r = path_walk(path, &in, true, mask);
+  int r = path_walk(path, &in, perms, true, mask);
   if (r < 0)
     return r;
-  r = _getattr(in, mask);
+  r = _getattr(in, mask, perms);
   if (r < 0) {
     ldout(cct, 3) << "stat exit on error!" << dendl;
     return r;
@@ -6748,7 +6748,7 @@ out:
 }
 
 int Client::statx(const char *relpath, struct ceph_statx *stx,
-		  unsigned int want, unsigned int flags)
+		  unsigned int want, unsigned int flags, const UserPerm& perms)
 {
   ldout(cct, 3) << "statx enter (relpath " << relpath << " want " << want << ")" << dendl;
   Mutex::Locker lock(client_lock);
@@ -6759,12 +6759,12 @@ int Client::statx(const char *relpath, struct ceph_statx *stx,
 
   unsigned mask = statx_to_mask(flags, want);
 
-  int r = path_walk(path, &in, flags & AT_SYMLINK_NOFOLLOW, mask);
+  int r = path_walk(path, &in, perms, flags & AT_SYMLINK_NOFOLLOW, mask);
   if (r < 0)
     return r;
 
   if (mask && !in->caps_issued_mask(mask)) {
-    r = _getattr(in, mask);
+    r = _getattr(in, mask, perms);
     if (r < 0) {
       ldout(cct, 3) << "statx exit on error!" << dendl;
       return r;
@@ -6777,7 +6777,7 @@ int Client::statx(const char *relpath, struct ceph_statx *stx,
 }
 
 int Client::lstat(const char *relpath, struct stat *stbuf,
-			  frag_info_t *dirstat, int mask)
+		  const UserPerm& perms, frag_info_t *dirstat, int mask)
 {
   ldout(cct, 3) << "lstat enter (relpath " << relpath << " mask " << mask << ")" << dendl;
   Mutex::Locker lock(client_lock);
@@ -6786,10 +6786,10 @@ int Client::lstat(const char *relpath, struct stat *stbuf,
   filepath path(relpath);
   InodeRef in;
   // don't follow symlinks
-  int r = path_walk(path, &in, false, mask);
+  int r = path_walk(path, &in, perms, false, mask);
   if (r < 0)
     return r;
-  r = _getattr(in, mask);
+  r = _getattr(in, mask, perms);
   if (r < 0) {
     ldout(cct, 3) << "lstat exit on error!" << dendl;
     return r;
@@ -9030,7 +9030,7 @@ int Client::_fsync(Fh *f, bool syncdataonly)
   return _fsync(f->inode.get(), syncdataonly);
 }
 
-int Client::fstat(int fd, struct stat *stbuf, int mask)
+int Client::fstat(int fd, struct stat *stbuf, const UserPerm& perms, int mask)
 {
   Mutex::Locker lock(client_lock);
   tout(cct) << "fstat mask " << hex << mask << dec << std::endl;
@@ -9039,7 +9039,7 @@ int Client::fstat(int fd, struct stat *stbuf, int mask)
   Fh *f = get_filehandle(fd);
   if (!f)
     return -EBADF;
-  int r = _getattr(f->inode, mask);
+  int r = _getattr(f->inode, mask, perms);
   if (r < 0)
     return r;
   fill_stat(f->inode, stbuf, NULL);
@@ -9047,7 +9047,7 @@ int Client::fstat(int fd, struct stat *stbuf, int mask)
   return r;
 }
 
-int Client::fstatx(int fd, struct ceph_statx *stx, unsigned int want, unsigned int flags)
+int Client::fstatx(int fd, struct ceph_statx *stx, unsigned int want, unsigned int flags, const UserPerm& perms)
 {
   Mutex::Locker lock(client_lock);
   tout(cct) << "fstatx flags " << hex << flags << " want " << want << dec << std::endl;
@@ -9061,7 +9061,7 @@ int Client::fstatx(int fd, struct ceph_statx *stx, unsigned int want, unsigned i
 
   int r = 0;
   if (mask && !f->inode->caps_issued_mask(mask)) {
-    r = _getattr(f->inode, mask);
+    r = _getattr(f->inode, mask, perms);
     if (r < 0) {
       ldout(cct, 3) << "fstatx exit on error!" << dendl;
       return r;

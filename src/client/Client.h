@@ -1074,10 +1074,9 @@ public:
 
   // inode stuff
   unsigned statx_to_mask(unsigned int flags, unsigned int want);
-  int stat(const char *path, struct stat *stbuf, frag_info_t *dirstat=0, int mask=CEPH_STAT_CAP_INODE_ALL);
-  int statx(const char *path, struct ceph_statx *stx, unsigned int want, unsigned int flags);
-  int lstat(const char *path, struct stat *stbuf, frag_info_t *dirstat=0, int mask=CEPH_STAT_CAP_INODE_ALL);
-  int lstatlite(const char *path, struct statlite *buf);
+  int stat(const char *path, struct stat *stbuf, const UserPerm& perms, frag_info_t *dirstat=0, int mask=CEPH_STAT_CAP_INODE_ALL);
+  int statx(const char *path, struct ceph_statx *stx, unsigned int want, unsigned int flags, const UserPerm& perms);
+  int lstat(const char *path, struct stat *stbuf, const UserPerm& perms, frag_info_t *dirstat=0, int mask=CEPH_STAT_CAP_INODE_ALL);
 
   int setattr(const char *relpath, struct stat *attr, int mask, const UserPerm& perms);
   int setattrx(const char *relpath, struct ceph_statx *stx, int mask, int flags, const UserPerm& perms);
@@ -1085,11 +1084,9 @@ public:
   int chmod(const char *path, mode_t mode, const UserPerm& perms);
   int fchmod(int fd, mode_t mode, const UserPerm& perms);
   int lchmod(const char *path, mode_t mode, const UserPerm& perms);
-  int chown(const char *path, uid_t new_uid, gid_t new_gid,
-	    const UserPerm& perms);
+  int chown(const char *path, uid_t new_uid, gid_t new_gid, const UserPerm& perms);
   int fchown(int fd, uid_t new_uid, gid_t new_gid, const UserPerm& perms);
-  int lchown(const char *path, uid_t new_uid, gid_t new_gid,
-	     const UserPerm& perms);
+  int lchown(const char *path, uid_t new_uid, gid_t new_gid, const UserPerm& perms);
   int utime(const char *path, struct utimbuf *buf, const UserPerm& perms);
   int lutime(const char *path, struct utimbuf *buf, const UserPerm& perms);
   int flock(int fd, int operation, uint64_t owner);
@@ -1112,8 +1109,8 @@ public:
   int fake_write_size(int fd, loff_t size);
   int ftruncate(int fd, loff_t size, const UserPerm& perms);
   int fsync(int fd, bool syncdataonly);
-  int fstat(int fd, struct stat *stbuf, int mask=CEPH_STAT_CAP_INODE_ALL);
-  int fstatx(int fd, struct ceph_statx *stx, unsigned int want, unsigned int flags);
+  int fstat(int fd, struct stat *stbuf, const UserPerm& perms, int mask=CEPH_STAT_CAP_INODE_ALL);
+  int fstatx(int fd, struct ceph_statx *stx, unsigned int want, unsigned int flags, const UserPerm& perms);
   int fallocate(int fd, int mode, loff_t offset, loff_t length);
 
   // full path xattr ops

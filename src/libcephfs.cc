@@ -612,7 +612,8 @@ extern "C" int ceph_stat(struct ceph_mount_info *cmount, const char *path,
 {
   if (!cmount->is_mounted())
     return -ENOTCONN;
-  return cmount->get_client()->stat(path, stbuf);
+  UserPerm perms = cmount->get_client()->pick_my_perms();
+  return cmount->get_client()->stat(path, stbuf, perms);
 }
 
 extern "C" int ceph_statx(struct ceph_mount_info *cmount, const char *path,
@@ -620,7 +621,8 @@ extern "C" int ceph_statx(struct ceph_mount_info *cmount, const char *path,
 {
   if (!cmount->is_mounted())
     return -ENOTCONN;
-  return cmount->get_client()->statx(path, stx, want, flags);
+  UserPerm perms = cmount->get_client()->pick_my_perms();
+  return cmount->get_client()->statx(path, stx, want, flags, perms);
 }
 
 extern "C" int ceph_lstat(struct ceph_mount_info *cmount, const char *path,
@@ -628,7 +630,8 @@ extern "C" int ceph_lstat(struct ceph_mount_info *cmount, const char *path,
 {
   if (!cmount->is_mounted())
     return -ENOTCONN;
-  return cmount->get_client()->lstat(path, stbuf);
+  UserPerm perms = cmount->get_client()->pick_my_perms();
+  return cmount->get_client()->lstat(path, stbuf, perms);
 }
 
 extern "C" int ceph_setattr(struct ceph_mount_info *cmount, const char *relpath,
@@ -915,7 +918,8 @@ extern "C" int ceph_fstat(struct ceph_mount_info *cmount, int fd, struct stat *s
 {
   if (!cmount->is_mounted())
     return -ENOTCONN;
-  return cmount->get_client()->fstat(fd, stbuf);
+  UserPerm perms = cmount->get_client()->pick_my_perms();
+  return cmount->get_client()->fstat(fd, stbuf, perms);
 }
 
 extern "C" int ceph_fstatx(struct ceph_mount_info *cmount, int fd, struct ceph_statx *stx,
@@ -923,7 +927,8 @@ extern "C" int ceph_fstatx(struct ceph_mount_info *cmount, int fd, struct ceph_s
 {
   if (!cmount->is_mounted())
     return -ENOTCONN;
-  return cmount->get_client()->fstatx(fd, stx, want, flags);
+  UserPerm perms = cmount->get_client()->pick_my_perms();
+  return cmount->get_client()->fstatx(fd, stx, want, flags, perms);
 }
 
 extern "C" int ceph_sync_fs(struct ceph_mount_info *cmount)
