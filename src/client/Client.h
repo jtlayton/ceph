@@ -806,10 +806,6 @@ private:
   void stat_to_statx(struct stat *st, struct ceph_statx *stx);
   int __setattrx(Inode *in, struct ceph_statx *stx, int mask, const UserPerm& perms, InodeRef *inp=0);
   int _setattrx(Inode *in, struct ceph_statx *stx, int mask, const UserPerm& perms);
-  int _setattr(Inode *in, struct stat *attr, int mask, int uid=-1, int gid=-1) {
-    UserPerm perms(uid, gid);
-    return _setattr(in, attr, mask, perms);
-  }
   int _setattr(Inode *in, struct stat *attr, int mask, const UserPerm& perms);
   int _setattr(InodeRef &in, struct stat *attr, int mask, const UserPerm& perms) {
     return _setattr(in.get(), attr, mask, perms);
