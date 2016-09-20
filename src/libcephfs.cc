@@ -1702,6 +1702,16 @@ extern "C" int ceph_ll_symlink(class ceph_mount_info *cmount,
   return (cmount->get_client()->ll_symlink(in, name, value, attr, out, perms));
 }
 
+extern "C" int ceph_ll_symlinkx(class ceph_mount_info *cmount,
+				Inode *in, const char *name,
+				const char *value, Inode **out,
+				struct ceph_statx *stx, unsigned want,
+				unsigned flags, int uid, int gid)
+{
+  return (cmount->get_client()->ll_symlinkx(in, name, value, out, stx, want,
+					    flags, uid, gid));
+}
+
 extern "C" int ceph_ll_rmdir(class ceph_mount_info *cmount,
 			     Inode *in, const char *name,
 			     int uid, int gid)

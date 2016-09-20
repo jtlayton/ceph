@@ -1525,6 +1525,11 @@ int ceph_ll_readlink(struct ceph_mount_info *cmount, struct Inode *in,
 int ceph_ll_symlink(struct ceph_mount_info *cmount, struct Inode *parent,
 		    const char *name, const char *value, struct stat *attr,
 		    struct Inode **in, int uid, int gid);
+int ceph_ll_symlinkx(struct ceph_mount_info *cmount,
+		       Inode *in, const char *name, const char *value,
+		       Inode **out, struct ceph_statx *stx,
+		       unsigned want, unsigned flags,
+		       int uid, int gid);
 int ceph_ll_rmdir(struct ceph_mount_info *cmount, struct Inode *in,
 		  const char *name, int uid, int gid);
 uint32_t ceph_ll_stripe_unit(struct ceph_mount_info *cmount,
