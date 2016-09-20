@@ -11671,8 +11671,8 @@ int Client::ll_open(Inode *in, int flags, Fh **fhp, const UserPerm& perms)
   return r;
 }
 
-int Client::ll_create(Inode *parent, const char *name, mode_t mode,
-		      int flags, struct stat *attr, Inode **outp, Fh **fhp,
+int Client::_ll_create(Inode *parent, const char *name, mode_t mode,
+		      int flags, InodeRef *in, int caps, Fh **fhp,
 		      const UserPerm& perms)
 {
   *fhp = NULL;
@@ -11681,7 +11681,7 @@ int Client::ll_create(Inode *parent, const char *name, mode_t mode,
 
   vinodeno_t vparent = _get_vino(parent);
 
-  ldout(cct, 3) << "ll_create " << vparent << " " << name << " 0" << oct <<
+  ldout(cct, 3) << "_ll_create " << vparent << " " << name << " 0" << oct <<
     mode << dec << " " << flags << ", uid " << perms.uid()
 		<< ", gid " << perms.gid() << dendl;
   tout(cct) << "ll_create" << std::endl;
@@ -11692,7 +11692,7 @@ int Client::ll_create(Inode *parent, const char *name, mode_t mode,
 
   bool created = false;
   InodeRef in;
-  int r = _lookup(parent, name, CEPH_STAT_CAP_INODE_ALL, &in, perms);
+  int r = _lookup(parent, name, caps, &in, perms);
 
   if (r == 0 && (flags & O_CREAT) && (flags & O_EXCL))
     return -EEXIST;
@@ -11703,7 +11703,7 @@ int Client::ll_create(Inode *parent, const char *name, mode_t mode,
       if (r < 0)
 	goto out;
     }
-    r = _create(parent, name, flags, mode, &in, fhp, 0, 0, 0, NULL, &created,
+    r = _create(parent, name, flags, mode, in, fhp, 0, 0, 0, NULL, &created,
 		perms);
     if (r < 0)
       goto out;
@@ -11712,13 +11712,12 @@ int Client::ll_create(Inode *parent, const char *name, mode_t mode,
   if (r < 0)
     goto out;
 
-  assert(in);
-  fill_stat(in, attr);
+  assert(*in);
 
-  ldout(cct, 20) << "ll_create created = " << created << dendl;
+  ldout(cct, 20) << "_ll_create created = " << created << dendl;
   if (!created) {
     if (!cct->_conf->fuse_default_permissions) {
-      r = may_open(in.get(), flags, perms);
+      r = may_open(in->get(), flags, perms);
       if (r < 0) {
 	if (*fhp) {
 	  int release_r = _release_fh(*fhp);
@@ -11728,30 +11727,53 @@ int Client::ll_create(Inode *parent, const char *name, mode_t mode,
       }
     }
     if (*fhp == NULL) {
-      r = _open(in.get(), flags, mode, fhp, perms);
+      r = _open(in->get(), flags, mode, fhp, perms);
       if (r < 0)
 	goto out;
     }
   }
 
 out:
-  if (r < 0)
-    attr->st_ino = 0;
-
   if (*fhp) {
     ll_unclosed_fh_set.insert(*fhp);
   }
-  tout(cct) << (unsigned long)*fhp << std::endl;
-  tout(cct) << attr->st_ino << std::endl;
-  ldout(cct, 3) << "ll_create " << parent << " " << name << " 0" << oct <<
-    mode << dec << " " << flags << " = " << r << " (" << *fhp << " " <<
-    hex << attr->st_ino << dec << ")" << dendl;
 
-  // passing an Inode in outp requires an additional ref
-  if (outp) {
-    if (in)
+  ino_t ino = 0;
+  if (r >= 0) {
+    Inode *inode = in->get();
+    if (use_faked_inos())
+      ino = inode->faked_ino;
+    else
+      ino = inode->ino;
+  }
+
+  tout(cct) << (unsigned long)*fhp << std::endl;
+  tout(cct) << ino << std::endl;
+  ldout(cct, 3) << "_ll_create " << parent << " " << name << " 0" << oct <<
+    mode << dec << " " << flags << " = " << r << " (" << *fhp << " " <<
+    hex << ino << dec << ")" << dendl;
+
+  return r;
+}
+
+int Client::ll_create(Inode *parent, const char *name, mode_t mode,
+		      int flags, struct stat *attr, Inode **outp, Fh **fhp,
+		      int uid, int gid)
+{
+  InodeRef in;
+
+  int r = _ll_create(parent, name, mode, flags, &in, CEPH_STAT_CAP_INODE_ALL, fhp, uid, gid);
+  if (r >= 0) {
+    assert(in);
+
+    // passing an Inode in outp requires an additional ref
+    if (outp) {
       _ll_get(in.get());
-    *outp = in.get();
+      *outp = in.get();
+    }
+    fill_stat(in, attr);
+  } else {
+    attr->st_ino = 0;
   }
 
   return r;
