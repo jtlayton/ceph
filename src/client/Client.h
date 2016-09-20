@@ -1115,6 +1115,9 @@ public:
   Inode *ll_get_inode(vinodeno_t vino);
   int ll_lookup(Inode *parent, const char *name, struct stat *attr,
 		Inode **out, const UserPerm& perms);
+  int ll_lookupx(Inode *parent, const char *name, Inode **out,
+			struct ceph_statx *stx, unsigned want, unsigned flags,
+			int uid, int gid);
   bool ll_forget(Inode *in, int count);
   bool ll_put(Inode *in);
   int ll_getattr(Inode *in, struct stat *st, const UserPerm& perms);

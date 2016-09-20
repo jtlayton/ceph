@@ -1416,6 +1416,15 @@ extern "C" int ceph_ll_lookup(class ceph_mount_info *cmount,
   return (cmount->get_client())->ll_lookup(parent, name, attr, out, perms);
 }
 
+extern "C" int ceph_ll_lookupx(struct ceph_mount_info *cmount,
+			       Inode *parent, const char *name, Inode **out,
+			       struct ceph_statx *stx, unsigned want,
+			       unsigned flags, int uid, int gid)
+{
+  return (cmount->get_client())->ll_lookupx(parent, name, out, stx, want,
+					    flags, uid, gid);
+}
+
 extern "C" int ceph_ll_put(class ceph_mount_info *cmount, Inode *in)
 {
   return (cmount->get_client()->ll_put(in));
