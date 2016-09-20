@@ -1586,6 +1586,16 @@ extern "C" int ceph_ll_create(class ceph_mount_info *cmount,
 					   attr, out, fhp, perms);
 }
 
+extern "C" int ceph_ll_createx(class ceph_mount_info *cmount,
+			       Inode *parent, const char *name, mode_t mode,
+			       int oflags, Inode **outp, Fh **fhp,
+			       struct ceph_statx *stx, unsigned want,
+			       unsigned lflags, int uid, int gid)
+{
+  return (cmount->get_client())->ll_createx(parent, name, mode, oflags, outp,
+					    fhp, stx, want, lflags, uid, gid);
+}
+
 extern "C" int ceph_ll_mknod(class ceph_mount_info *cmount,
 			     struct Inode *parent, const char *name,
 			     mode_t mode, dev_t rdev, struct stat *attr,
