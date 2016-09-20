@@ -1500,6 +1500,10 @@ int ceph_ll_mknod(struct ceph_mount_info *cmount, struct Inode *parent,
 int ceph_ll_mkdir(struct ceph_mount_info *cmount, struct Inode *parent,
 		  const char *name, mode_t mode, struct stat *attr,
 		  Inode **out, int uid, int gid);
+int ceph_ll_mkdirx(struct ceph_mount_info *cmount, Inode *parent,
+		   const char *name, mode_t mode, Inode **out,
+		   struct ceph_statx *stx, unsigned want,
+		   unsigned flags, int uid, int gid);
 int ceph_ll_link(struct ceph_mount_info *cmount, struct Inode *in,
 		 struct Inode *newparrent, const char *name,
 		 struct stat *attr, int uid, int gid);
