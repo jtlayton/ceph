@@ -9785,6 +9785,33 @@ int Client::ll_walk(const char* name, Inode **out, struct stat *attr,
   }
 }
 
+int Client::ll_walkx(const char* name, Inode **out, struct ceph_statx *stx,
+		     unsigned int want, unsigned int flags)
+{
+  Mutex::Locker lock(client_lock);
+  filepath fp(name, 0);
+  InodeRef in;
+  int rc;
+  unsigned mask = statx_to_mask(flags, want);
+
+  ldout(cct, 3) << "ll_walkx" << name << dendl;
+  tout(cct) << "ll_walkx" << std::endl;
+  tout(cct) << name << std::endl;
+
+  rc = path_walk(fp, &in, flags & AT_SYMLINK_NOFOLLOW, mask);
+  if (rc < 0) {
+    /* zero out mask, just in case... */
+    stx->stx_mask = 0;
+    stx->stx_ino = 0;
+    *out = NULL;
+    return rc;
+  } else {
+    assert(in);
+    fill_statx(in, mask, stx);
+    *out = in.get();
+    return 0;
+  }
+}
 
 void Client::_ll_get(Inode *in)
 {
