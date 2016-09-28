@@ -6656,7 +6656,7 @@ int Client::setattrx(const char *relpath, struct ceph_statx *stx, int mask,
 
   filepath path(relpath);
   InodeRef in;
-  int r = path_walk(path, &in, perms, flags & AT_SYMLINK_NOFOLLOW);
+  int r = path_walk(path, &in, perms, !(flags & AT_SYMLINK_NOFOLLOW));
   if (r < 0)
     return r;
   return _setattrx(in, stx, mask, perms);
@@ -6736,7 +6736,7 @@ int Client::statx(const char *relpath, struct ceph_statx *stx,
 
   unsigned mask = statx_to_mask(flags, want);
 
-  int r = path_walk(path, &in, perms, flags & AT_SYMLINK_NOFOLLOW, mask);
+  int r = path_walk(path, &in, perms, !(flags & AT_SYMLINK_NOFOLLOW), mask);
   if (r < 0)
     return r;
 
