@@ -24,6 +24,8 @@ private:
   gid_t *gids;
   bool alloced_gids;
   void deep_copy(UserPerm& a, const UserPerm& b) {
+    if (alloced_gids)
+      delete[] gids;
     a.m_uid = b.m_uid;
     a.m_gid = b.m_gid;
     a.gid_count = b.gid_count;
@@ -52,7 +54,7 @@ public:
   }
   ~UserPerm() {
     if (alloced_gids)
-      delete gids;
+      delete[] gids;
   }
   UserPerm& operator=(const UserPerm o) {
     deep_copy(*this, o);
