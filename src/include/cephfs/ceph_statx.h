@@ -65,15 +65,20 @@ struct ceph_statx {
 /*
  * Compatability macros until these defines make their way into glibc
  */
+#ifndef AT_STATX_DONT_SYNC
+#define AT_STATX_DONT_SYNC	0x4000 /* Don't sync attributes with the server */
+#endif
+
+/* FIXME: Temporary workaround until downstream consumers are fixed */
 #ifndef AT_NO_ATTR_SYNC
-#define AT_NO_ATTR_SYNC		0x4000 /* Don't sync attributes with the server */
+#define	AT_NO_ATTR_SYNC		AT_STATX_DONT_SYNC
 #endif
 
 /*
  * The statx interfaces only allow these flags. In order to allow us to add
  * others in the future, we disallow setting any that aren't recognized.
  */
-#define CEPH_REQ_FLAG_MASK		(AT_SYMLINK_NOFOLLOW|AT_NO_ATTR_SYNC)
+#define CEPH_REQ_FLAG_MASK	(AT_SYMLINK_NOFOLLOW|AT_STATX_DONT_SYNC)
 
 #ifdef __cplusplus
 }
