@@ -316,7 +316,7 @@ void Beacon::set_want_state(MDSMap const *mdsmap, MDSMap::DaemonState const news
  * some health metrics that we will send in the next
  * beacon.
  */
-void Beacon::notify_health(MDSRank const *mds)
+void Beacon::notify_health(MDSRank *mds)
 {
   Mutex::Locker l(lock);
   if (!mds) {
@@ -363,13 +363,15 @@ void Beacon::notify_health(MDSRank const *mds)
       // client_t is equivalent to session.info.inst.name.num
       // Construct an entity_name_t to lookup into SessionMap
       entity_name_t ename(CEPH_ENTITY_TYPE_CLIENT, i->v);
-      Session const *s = mds->sessionmap.get_session(ename);
+      Session *s = mds->sessionmap.get_session(ename);
       if (s == NULL) {
         // Shouldn't happen, but not worth crashing if it does as this is
         // just health-reporting code.
         derr << "Client ID without session: " << i->v << dendl;
         continue;
       }
+
+      mds->blacklist_session(s);
 
       std::ostringstream oss;
       oss << "Client " << s->get_human_name() << " failing to respond to capability release";

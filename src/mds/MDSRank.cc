@@ -19,6 +19,7 @@
 #include "messages/MMDSMap.h"
 #include "messages/MCommand.h"
 #include "messages/MCommandReply.h"
+#include "messages/MMonCommand.h"
 
 #include "MDSDaemon.h"
 #include "MDSMap.h"
@@ -2641,5 +2642,23 @@ bool MDSRankDispatcher::handle_command(
 epoch_t MDSRank::get_osd_epoch() const
 {
   return objecter->with_osdmap(std::mem_fn(&OSDMap::get_epoch));  
+}
+
+void MDSRank::blacklist_session(Session *s)
+{
+  dout(10) << "blacklist_session " << dendl;
+
+  vector<string> cmd;
+  cmd.push_back("{\"prefix\":\"osd blacklist\", ");
+  cmd.push_back("\"blacklistop\":\"add\",");
+
+  stringstream ss;
+  ss << s->connection.get()->peer_addr;
+  cmd.push_back("\"addr\":\"" + ss.str() + "\"");
+
+  MMonCommand *m = new MMonCommand(monc->get_fsid());
+  m->cmd = cmd;
+
+  monc->send_mon_message(m);
 }
 

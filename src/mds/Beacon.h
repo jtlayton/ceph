@@ -53,7 +53,7 @@ public:
   bool ms_handle_refused(Connection *c) {return false;}
 
   void notify_mdsmap(MDSMap const *mdsmap);
-  void notify_health(MDSRank const *mds);
+  void notify_health(MDSRank *mds);
 
   void handle_mds_beacon(MMDSBeacon *m);
   void send();

@@ -361,6 +361,8 @@ class MDSRank {
     epoch_t get_osd_epoch_barrier() const {return osd_epoch_barrier;}
     epoch_t get_osd_epoch() const;
 
+    void blacklist_session(Session *s);
+
     ceph_tid_t issue_tid() { return ++last_tid; }
 
     Finisher     *finisher;
