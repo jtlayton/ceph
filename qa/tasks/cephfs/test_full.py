@@ -282,13 +282,13 @@ class FullnessTestCase(CephFSTestCase):
             # Wait long enough for a background flush that should fail
             time.sleep(30)
 
-            # ...and check that the failed background flush is reflected in fclose
+            # we may get an error here, depending on the fs version in use
             try:
                 os.close(f)
             except OSError:
-                print "close() returned an error as expected"
+                print "Saw error from close() (legacy behavior)"
             else:
-                raise RuntimeError("close() failed to raise error")
+                print "Did not see error from close() (kernel behavior)"
 
             os.unlink("{file_path}")
             """)
@@ -350,13 +350,13 @@ class FullnessTestCase(CephFSTestCase):
             if not full:
                 raise RuntimeError("Failed to reach fullness after writing %d bytes" % bytes)
 
-            # The error sticks to the inode until we dispose of it
+            # we may get an error here, depending on the fs version in use
             try:
                 os.close(f)
             except OSError:
-                print "Saw error from close() as expected"
+                print "Saw error from close() (legacy behavior)"
             else:
-                raise RuntimeError("Did not see expected error from close()")
+                print "Did not see error from close() (kernel behavior)"
 
             os.unlink("{file_path}")
             """)
