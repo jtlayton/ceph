@@ -338,9 +338,6 @@ void Server::handle_client_session(MClientSession *m)
 	session->is_killing() ||
 	terminating_sessions) {
       dout(10) << "currently open|opening|stale|killing, dropping this req" << dendl;
-      // set client metadata for session opened by prepare_force_open_sessions
-      if (!m->client_meta.empty())
-	session->set_client_metadata(m->client_meta);
       m->put();
       return;
     }
@@ -589,6 +586,7 @@ void Server::_session_logged(Session *session, uint64_t state_seq, bool open, ve
  *  - sessions learned from other MDSs during a cross-MDS rename
  */
 version_t Server::prepare_force_open_sessions(map<client_t,entity_inst_t>& cm,
+					      map<client_t,map<string,string> >& cmm,
 					      map<client_t, pair<Session*,uint64_t> >& smap)
 {
   version_t pv = mds->sessionmap.get_projected();
@@ -598,11 +596,12 @@ version_t Server::prepare_force_open_sessions(map<client_t,entity_inst_t>& cm,
 	   << dendl;
 
   mds->objecter->with_osdmap(
-      [this, &cm](const OSDMap &osd_map) {
+      [this, &cm, &cmm](const OSDMap &osd_map) {
 	for (auto p = cm.begin(); p != cm.end(); ) {
 	  if (osd_map.is_blacklisted(p->second.addr)) {
 	    dout(10) << " ignoring blacklisted client." << p->first
 		     << " (" <<  p->second.addr << ")" << dendl;
+	    cmm.erase(p->first);
 	    cm.erase(p++);
 	  } else {
 	    ++p;
@@ -618,6 +617,14 @@ version_t Server::prepare_force_open_sessions(map<client_t,entity_inst_t>& cm,
 	session->is_closing() ||
 	session->is_killing()) {
       sseq = mds->sessionmap.set_state(session, Session::STATE_OPENING);
+      auto q = cmm.find(p->first);
+      if (q != cmm.end()) {
+#ifdef HAVE_STDLIB_MAP_SPLICING
+	session->info.client_metadata.merge(q->second);
+#else
+	session->info.client_metadata.insert(q->second.begin(), q->second.end());
+#endif
+      }
     } else {
       assert(session->is_open() ||
 	     session->is_opening() ||
@@ -7392,9 +7399,13 @@ version_t Server::_rename_prepare_import(MDRequestRef& mdr, CDentry *srcdn, buff
 	  
   // imported caps
   map<client_t,entity_inst_t> client_map;
+  map<client_t, map<string,string> > client_metadata_map;
   decode(client_map, blp);
-  prepare_force_open_sessions(client_map, mdr->more()->imported_session_map);
+  decode(client_metadata_map, blp);
+  prepare_force_open_sessions(client_map, client_metadata_map,
+			      mdr->more()->imported_session_map);
   encode(client_map, *client_map_bl, mds->mdsmap->get_up_features());
+  encode(client_metadata_map, *client_map_bl);
 
   list<ScatterLock*> updated_scatterlocks;
   mdcache->migrator->decode_import_inode(srcdn, blp, srcdn->authority().first, mdr->ls,
@@ -8267,23 +8278,26 @@ void Server::_logged_slave_rename(MDRequestRef& mdr,
   // export srci?
   if (srcdn->is_auth() && srcdnl->is_primary()) {
     // set export bounds for CInode::encode_export()
-    list<CDir*> bounds;
-    if (srcdnl->get_inode()->is_dir()) {
-      srcdnl->get_inode()->get_dirfrags(bounds);
-      for (list<CDir*>::iterator p = bounds.begin(); p != bounds.end(); ++p)
-	(*p)->state_set(CDir::STATE_EXPORTBOUND);
-    }
-
-    map<client_t,entity_inst_t> exported_client_map;
-    bufferlist inodebl;
-    mdcache->migrator->encode_export_inode(srcdnl->get_inode(), inodebl, 
-					   exported_client_map);
-
-    for (list<CDir*>::iterator p = bounds.begin(); p != bounds.end(); ++p)
-      (*p)->state_clear(CDir::STATE_EXPORTBOUND);
-
     if (reply) {
+      list<CDir*> bounds;
+      if (srcdnl->get_inode()->is_dir()) {
+	srcdnl->get_inode()->get_dirfrags(bounds);
+	for (list<CDir*>::iterator p = bounds.begin(); p != bounds.end(); ++p)
+	  (*p)->state_set(CDir::STATE_EXPORTBOUND);
+      }
+
+      map<client_t,entity_inst_t> exported_client_map;
+      map<client_t, map<string,string> > exported_client_metadata_map;
+      bufferlist inodebl;
+      mdcache->migrator->encode_export_inode(srcdnl->get_inode(), inodebl,
+					     exported_client_map,
+					     exported_client_metadata_map);
+
+      for (list<CDir*>::iterator p = bounds.begin(); p != bounds.end(); ++p)
+	(*p)->state_clear(CDir::STATE_EXPORTBOUND);
+
       encode(exported_client_map, reply->inode_export, mds->mdsmap->get_up_features());
+      encode(exported_client_metadata_map, reply->inode_export);
       reply->inode_export.claim_append(inodebl);
       reply->inode_export_v = srcdnl->get_inode()->inode.version;
     }

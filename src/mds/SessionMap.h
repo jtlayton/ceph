@@ -550,11 +550,20 @@ public:
 	s.insert(p->second);
   }
 
-  void replay_open_sessions(map<client_t,entity_inst_t>& client_map) {
+  void replay_open_sessions(map<client_t,entity_inst_t>& client_map,
+				map<client_t,map<string,string> >& client_metadata_map) {
     for (map<client_t,entity_inst_t>::iterator p = client_map.begin(); 
 	 p != client_map.end(); 
 	 ++p) {
       Session *s = get_or_add_session(p->second);
+      auto q = client_metadata_map.find(p->first);
+      if (q != client_metadata_map.end()) {
+#ifdef HAVE_STDLIB_MAP_SPLICING
+	s->info.client_metadata.merge(q->second);
+#else
+	s->info.client_metadata.insert(q->second.begin(), q->second.end());
+#endif
+      }
       set_state(s, Session::STATE_OPEN);
       replay_dirty_session(s);
     }
