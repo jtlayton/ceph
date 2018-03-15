@@ -5662,18 +5662,8 @@ void Client::handle_command_reply(MCommandReply *m)
 // -------------------
 // MOUNT
 
-int Client::mount(const std::string &mount_root, const UserPerm& perms,
-		  bool require_mds)
+int Client::subscribe_mdsmap()
 {
-  Mutex::Locker lock(client_lock);
-
-  if (mounted) {
-    ldout(cct, 5) << "already mounted" << dendl;
-    return 0;
-  }
-
-  unmounting = false;
-
   int r = authenticate();
   if (r < 0) {
     lderr(cct) << "authentication failed: " << cpp_strerror(r) << dendl;
@@ -5698,6 +5688,27 @@ int Client::mount(const std::string &mount_root, const UserPerm& perms,
 
   monclient->sub_want(want, 0, 0);
   monclient->renew_subs();
+
+  return 0;
+}
+
+int Client::mount(const std::string &mount_root, const UserPerm& perms,
+		  bool require_mds)
+{
+  Mutex::Locker lock(client_lock);
+
+  if (mounted) {
+    ldout(cct, 5) << "already mounted" << dendl;
+    return 0;
+  }
+
+  unmounting = false;
+
+  int r = subscribe_mdsmap();
+  if (r < 0) {
+    lderr(cct) << "mdsmap subscription failed: " << cpp_strerror(r) << dendl;
+    return r;
+  }
 
   tick(); // start tick
   
@@ -13914,8 +13925,20 @@ int Client::start_reclaim(const std::string& uuid, unsigned flags)
 {
   Mutex::Locker l(client_lock);
   assert(!uuid.empty());
-  if (!mounted)
+  if (!initialized)
     return -ENOTCONN;
+
+  int r = subscribe_mdsmap();
+  if (r < 0) {
+    lderr(cct) << "mdsmap subscription failed: " << cpp_strerror(r) << dendl;
+    return r;
+  }
+
+  if (metadata.empty())
+    populate_metadata("");
+
+  while (mdsmap->get_epoch() == 0)
+    wait_on_list(waiting_for_mdsmap);
 
   for (unsigned mds = 0; mds < mdsmap->get_num_in_mds(); ) {
     if (!mdsmap->is_up(mds)) {
@@ -13987,7 +14010,8 @@ int Client::start_reclaim(const std::string& uuid, unsigned flags)
 
 void Client::finish_reclaim()
 {
-  if (!mounted)
+  auto it = metadata.find("reclaiming_uuid");
+  if (it == metadata.end())
     return;
 
   for (auto &it : mds_sessions) {
@@ -13996,8 +14020,6 @@ void Client::finish_reclaim()
     it.second.con->send_message(m);
   }
 
-  auto it = metadata.find("reclaiming_uuid");
-  assert(it != metadata.end());
   metadata["uuid"] = it->second;
   metadata.erase(it);
 }
