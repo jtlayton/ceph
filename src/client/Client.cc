@@ -13901,7 +13901,7 @@ void Client::set_uuid(const std::string& uuid)
   metadata["uuid"] = uuid;
 }
 
-int Client::start_reclaim(const std::string& uuid)
+int Client::start_reclaim(const std::string& uuid, unsigned flags)
 {
   Mutex::Locker l(client_lock);
   assert(!uuid.empty());
@@ -13922,9 +13922,14 @@ int Client::start_reclaim(const std::string& uuid)
 	  session->reclaim_state == MetaSession::RECLAIMING) {
 	MClientSession *m = new MClientSession(CEPH_SESSION_REQUEST_RECLAIM);
 	m->client_meta["uuid"] = uuid;
+	m->client_meta["flags"] = stringify(flags);
 	session->con->send_message(m);
 	wait_on_list(waiting_for_reclaim);
       } else if (session->reclaim_state == MetaSession::RECLAIM_FAIL) {
+	if (flags & CEPH_RECLAIM_RESET) {
+	  mds++;
+	  continue;
+	}
 	return -ENOTRECOVERABLE;
       } else {
 	mds++;
@@ -13964,7 +13969,10 @@ int Client::start_reclaim(const std::string& uuid)
   if (blacklisted)
     return -ENOTRECOVERABLE;
 
-  metadata["reclaiming_uuid"] = uuid;
+  if (flags & CEPH_RECLAIM_RESET)
+    metadata["uuid"] = uuid;
+  else
+    metadata["reclaiming_uuid"] = uuid;
   return 0;
 }
 
