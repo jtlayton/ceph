@@ -9,6 +9,7 @@ if(${WITH_CEPHFS})
     acl.cc
     main.cc
     deleg.cc
+    reclaim.cc
   )
   set_target_properties(ceph_test_libcephfs PROPERTIES COMPILE_FLAGS
     ${UNITTEST_CXX_FLAGS})
