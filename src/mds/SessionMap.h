@@ -98,9 +98,8 @@ private:
   // that appropriate mark_dirty calls follow.
   std::deque<version_t> projected;
 
-
-
 public:
+  Session *reclaiming_from = nullptr;
 
   void push_pv(version_t pv)
   {

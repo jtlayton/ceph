@@ -2093,7 +2093,27 @@ void Client::handle_client_session(MClientSession *m)
   case CEPH_SESSION_REJECT:
     rejected_by_mds[session->mds_num] = session->inst;
     _closed_mds_session(session);
+    break;
 
+  case CEPH_SESSION_RECLAIM_REPLY:
+    {
+      auto p = m->client_meta.find("reclaim_epoch");
+      if (p == m->client_meta.end()) {
+	session->reclaim_state = MetaSession::RECLAIM_FAIL;
+	auto q = m->client_meta.find("reclaim_errno");
+	if (q != m->client_meta.end())
+	  reclaim_errno = strtol(q->second.c_str(), nullptr, 10);
+      } else {
+	session->reclaim_state = MetaSession::RECLAIM_OK;
+	epoch_t epoch = strtoul(p->second.c_str(), nullptr, 10);
+	if (epoch > reclaim_osd_epoch)
+	  reclaim_osd_epoch = epoch;
+	auto q = m->client_meta.find("reclaim_addr");
+	if (q != m->client_meta.end())
+	  reclaim_target_addr.parse(q->second.c_str());
+      }
+      signal_cond_list(waiting_for_reclaim);
+    }
     break;
 
   default:
@@ -2753,6 +2773,9 @@ void Client::send_reconnect(MetaSession *session)
   session->con->send_message(m);
 
   mount_cond.Signal();
+
+  if (session->reclaim_state == MetaSession::RECLAIMING)
+    signal_cond_list(waiting_for_reclaim);
 }
 
 
@@ -5628,18 +5651,8 @@ void Client::handle_command_reply(MCommandReply *m)
 // -------------------
 // MOUNT
 
-int Client::mount(const std::string &mount_root, const UserPerm& perms,
-		  bool require_mds)
+int Client::subscribe_mdsmap()
 {
-  Mutex::Locker lock(client_lock);
-
-  if (mounted) {
-    ldout(cct, 5) << "already mounted" << dendl;
-    return 0;
-  }
-
-  unmounting = false;
-
   int r = authenticate();
   if (r < 0) {
     lderr(cct) << "authentication failed: " << cpp_strerror(r) << dendl;
@@ -5664,6 +5677,27 @@ int Client::mount(const std::string &mount_root, const UserPerm& perms,
 
   monclient->sub_want(want, 0, 0);
   monclient->renew_subs();
+
+  return 0;
+}
+
+int Client::mount(const std::string &mount_root, const UserPerm& perms,
+		  bool require_mds)
+{
+  Mutex::Locker lock(client_lock);
+
+  if (mounted) {
+    ldout(cct, 5) << "already mounted" << dendl;
+    return 0;
+  }
+
+  unmounting = false;
+
+  int r = subscribe_mdsmap();
+  if (r < 0) {
+    lderr(cct) << "mdsmap subscription failed: " << cpp_strerror(r) << dendl;
+    return r;
+  }
 
   tick(); // start tick
   
@@ -13885,6 +13919,125 @@ void Client::clear_filer_flags(int flags)
   Mutex::Locker l(client_lock);
   assert(flags == CEPH_OSD_FLAG_LOCALIZE_READS);
   objecter->clear_global_op_flag(flags);
+}
+
+// called before mount
+void Client::set_uuid(const std::string& uuid)
+{
+  Mutex::Locker l(client_lock);
+  assert(initialized);
+  assert(!uuid.empty());
+
+  metadata["uuid"] = uuid;
+  _close_sessions();
+}
+
+// called before mount
+int Client::start_reclaim(const std::string& uuid, unsigned flags)
+{
+  Mutex::Locker l(client_lock);
+  if (uuid.empty())
+    return -EINVAL;
+  if (!initialized)
+    return -ENOTCONN;
+
+  int r = subscribe_mdsmap();
+  if (r < 0) {
+    lderr(cct) << "mdsmap subscription failed: " << cpp_strerror(r) << dendl;
+    return r;
+  }
+
+  if (metadata.empty())
+    populate_metadata("");
+
+  while (mdsmap->get_epoch() == 0)
+    wait_on_list(waiting_for_mdsmap);
+
+  reclaim_errno = 0;
+  for (unsigned mds = 0; mds < mdsmap->get_num_in_mds(); ) {
+    if (!mdsmap->is_up(mds)) {
+      ldout(cct, 10) << "mds." << mds << " not active, waiting for new mdsmap" << dendl;
+      wait_on_list(waiting_for_mdsmap);
+      continue;
+    }
+
+    MetaSession *session;
+    if (!have_open_session(mds)) {
+      session = _get_or_open_mds_session(mds);
+      if (session->state != MetaSession::STATE_OPENING) {
+	// umounting?
+	return -EINVAL;
+      }
+      ldout(cct, 10) << "waiting for session to mds." << mds << " to open" << dendl;
+      wait_on_context_list(session->waiting_for_open);
+      if (rejected_by_mds.count(mds))
+	return -EPERM;
+      continue;
+    }
+
+    session = &mds_sessions.at(mds);
+    if (session->reclaim_state == MetaSession::RECLAIM_NULL ||
+	session->reclaim_state == MetaSession::RECLAIMING) {
+      MClientSession *m = new MClientSession(CEPH_SESSION_REQUEST_RECLAIM);
+      m->client_meta["uuid"] = uuid;
+      m->client_meta["flags"] = stringify(flags);
+      session->con->send_message(m);
+      session->reclaim_state = MetaSession::RECLAIMING;
+      wait_on_list(waiting_for_reclaim);
+    } else if (session->reclaim_state == MetaSession::RECLAIM_FAIL) {
+      return reclaim_errno ? : -ENOTRECOVERABLE;
+      mds++;
+    } else {
+      mds++;
+    }
+  }
+
+  // didn't find target session in any mds
+  if (reclaim_target_addr == entity_addr_t()) {
+    if (flags & CEPH_RECLAIM_RESET)
+      return -ENOENT;
+    return -ENOTRECOVERABLE;
+  }
+
+  if (flags & CEPH_RECLAIM_RESET)
+    return 0;
+
+  // use blacklist to check if target session was killed
+  // (config option mds_session_blacklist_on_evict needs to be true)
+  C_SaferCond cond;
+  if (!objecter->wait_for_map(reclaim_osd_epoch, &cond)) {
+    ldout(cct, 10) << __func__ << ": waiting for OSD epoch " << reclaim_osd_epoch << dendl;
+    cond.wait();
+  }
+
+  bool blacklisted = objecter->with_osdmap(
+      [this](const OSDMap &osd_map) -> bool {
+	return osd_map.is_blacklisted(reclaim_target_addr);
+      });
+  if (blacklisted)
+    return -ENOTRECOVERABLE;
+
+  metadata["reclaiming_uuid"] = uuid;
+  return 0;
+}
+
+void Client::finish_reclaim()
+{
+  auto it = metadata.find("reclaiming_uuid");
+  if (it == metadata.end()) {
+    for (auto &it : mds_sessions)
+      it.second.reclaim_state = MetaSession::RECLAIM_NULL;
+    return;
+  }
+
+  for (auto &it : mds_sessions) {
+    it.second.reclaim_state = MetaSession::RECLAIM_NULL;
+    MClientSession *m = new MClientSession(CEPH_SESSION_REQUEST_RECLAIM_DONE);
+    it.second.con->send_message(m);
+  }
+
+  metadata["uuid"] = it->second;
+  metadata.erase(it);
 }
 
 /**

@@ -127,6 +127,11 @@ public:
   void kill_session(Session *session, Context *on_safe);
   size_t apply_blacklist(const std::set<entity_addr_t> &blacklist);
   void journal_close_session(Session *session, int state, Context *on_safe);
+
+  Session *find_session_by_uuid(const std::string& uuid);
+  void reclaim_session(Session *session, MClientSession *m);
+  void finish_reclaim_session(Session *session, MClientSession *reply=nullptr);
+
   void reconnect_clients(MDSInternalContext *reconnect_done_);
   void handle_client_reconnect(class MClientReconnect *m);
   //void process_reconnect_cap(CInode *in, int from, ceph_mds_cap_reconnect& capinfo);

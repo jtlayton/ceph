@@ -307,8 +307,14 @@ enum {
     // A response to REQUEST_OPEN indicating that the client should
     // permanently desist from contacting the MDS
 	CEPH_SESSION_REJECT,
-        CEPH_SESSION_REQUEST_FLUSH_MDLOG
+        CEPH_SESSION_REQUEST_FLUSH_MDLOG,
+        CEPH_SESSION_REQUEST_RECLAIM,
+        CEPH_SESSION_RECLAIM_REPLY,
+        CEPH_SESSION_REQUEST_RECLAIM_DONE,
 };
+
+// flags for state reclaim
+#define CEPH_RECLAIM_RESET	1
 
 extern const char *ceph_session_op_name(int op);
 

@@ -50,6 +50,7 @@
 #include "events/EOpen.h"
 #include "events/ECommitted.h"
 
+#include "include/stringify.h"
 #include "include/filepath.h"
 #include "common/errno.h"
 #include "common/Timer.h"
@@ -295,6 +296,94 @@ public:
   }
 };
 
+Session* Server::find_session_by_uuid(const std::string& uuid)
+{
+  Session* session = nullptr;
+  for (auto& it : mds->sessionmap.get_sessions()) {
+    auto& metadata = it.second->info.client_metadata;
+
+    auto p = metadata.find("uuid");
+    if (p == metadata.end() || p->second != uuid)
+      continue;
+
+    if (!session) {
+      session = it.second;
+    } else if (!session->reclaiming_from) {
+      assert(it.second->reclaiming_from == session);
+      session = it.second;
+    } else {
+      assert(session->reclaiming_from == it.second);
+    }
+  }
+  return session;
+}
+
+void Server::reclaim_session(Session *session, MClientSession *m)
+{
+  if (!session->is_open() && !session->is_stale()) {
+    dout(10) << "session not open, dropping this req" << dendl;
+    return;
+  }
+
+  MClientSession *reply = new MClientSession(CEPH_SESSION_RECLAIM_REPLY);
+  auto it = m->client_meta.find("uuid");
+  if (it == m->client_meta.end()) {
+    dout(10) << __func__ << " invalid message (no uuid)" << dendl;
+    reply->client_meta["reclaim_errno"] = stringify(-EINVAL);
+    mds->send_message_client(reply, session);
+    return;
+  }
+  const auto& uuid = it->second;
+
+  unsigned flags = 0;
+  it = m->client_meta.find("flags");
+  if (it != m->client_meta.end())
+    flags = strtoul(it->second.c_str(), nullptr, 0);
+
+  if (flags != CEPH_RECLAIM_RESET) {
+    dout(10) << __func__ << " unsupported flags" << dendl;
+    reply->client_meta["reclaim_errno"] = stringify(-EOPNOTSUPP);
+    mds->send_message_client(reply, session);
+    return;
+  }
+
+  Session* target = find_session_by_uuid(uuid);
+  if (target) {
+    assert(!target->reclaiming_from);
+    assert(!session->reclaiming_from);
+    session->reclaiming_from = target;
+  }
+
+  auto epoch = mds->objecter->with_osdmap([](const OSDMap &o){ return o.get_epoch(); });
+  reply->client_meta["reclaim_epoch"] = stringify(epoch);
+  if (target)
+    reply->client_meta["reclaim_addr"] = stringify(target->info.inst.addr);
+
+  if (flags & CEPH_RECLAIM_RESET) {
+    finish_reclaim_session(session, reply);
+    return;
+  }
+
+  ceph_abort();
+}
+
+void Server::finish_reclaim_session(Session *session, MClientSession *reply)
+{
+  Session *target = session->reclaiming_from;
+  if (target) {
+    session->reclaiming_from = nullptr;
+    kill_session(target,
+	new FunctionContext([this, session, reply](int r) {
+	  if (reply)
+	    mds->send_message_client(reply, session);
+	}));
+    mdlog->flush();
+  } else {
+    if (reply)
+      mds->send_message_client(reply, session);
+  }
+}
+
 /* This function DOES put the passed message before returning*/
 void Server::handle_client_session(MClientSession *m)
 {
@@ -369,23 +458,36 @@ void Server::handle_client_session(MClientSession *m)
       dout(20) << "  " << i->first << ": " << i->second << dendl;
     }
 
-    // Special case for the 'root' metadata path; validate that the claimed
-    // root is actually within the caps of the session
-    if (session->info.client_metadata.count("root")) {
-      const auto claimed_root = session->info.client_metadata.at("root");
-      // claimed_root has a leading "/" which we strip before passing
-      // into caps check
-      if (claimed_root.empty() || claimed_root[0] != '/' ||
-          !session->auth_caps.path_capable(claimed_root.substr(1))) {
-        derr << __func__ << " forbidden path claimed as mount root: "
-             << claimed_root << " by " << m->get_source() << dendl;
-        // Tell the client we're rejecting their open
-        mds->send_message_client(new MClientSession(CEPH_SESSION_REJECT), session);
-        mds->clog->warn() << "client session with invalid root '" <<
-          claimed_root << "' denied (" << session->info.inst << ")";
-        session->clear();
-        // Drop out; don't record this session in SessionMap or journal it.
-        break;
+    {
+      std::map<std::string, std::string>::const_iterator it;
+      // Special case for the 'root' metadata path; validate that the claimed
+      // root is actually within the caps of the session
+      it = session->info.client_metadata.find("root");
+      if (it != session->info.client_metadata.end()) {
+	const auto& claimed_root = it->second;
+	// claimed_root has a leading "/" which we strip before passing
+	// into caps check
+	if (claimed_root.empty() || claimed_root[0] != '/' ||
+	    !session->auth_caps.path_capable(claimed_root.substr(1))) {
+	  // Tell the client we're rejecting their open
+	  mds->send_message_client(new MClientSession(CEPH_SESSION_REJECT), session);
+	  mds->clog->warn() << "client session with invalid root '"
+			    << claimed_root << "' denied (" << session->info.inst << ")";
+	  session->clear();
+	  // Drop out; don't record this session in SessionMap or journal it.
+	  break;
+	}
+      }
+
+      it = session->info.client_metadata.find("uuid");
+      if (it != session->info.client_metadata.end()) {
+	if (find_session_by_uuid(it->second)) {
+	  mds->clog->warn() << "client session with duplicated session uuid '"
+			    << it->second << "' denied (" << session->info.inst << ")";
+	  mds->send_message_client(new MClientSession(CEPH_SESSION_REJECT), session);
+	  session->clear();
+	  break;
+	}
       }
     }
 
@@ -460,6 +562,13 @@ void Server::handle_client_session(MClientSession *m)
   case CEPH_SESSION_REQUEST_FLUSH_MDLOG:
     if (mds->is_active())
       mdlog->flush();
+    break;
+
+  case CEPH_SESSION_REQUEST_RECLAIM:
+    reclaim_session(session, m);
+    break;
+  case CEPH_SESSION_REQUEST_RECLAIM_DONE:
+    finish_reclaim_session(session);
     break;
 
   default:

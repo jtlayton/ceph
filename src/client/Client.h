@@ -492,6 +492,8 @@ protected:
   void put_inode(Inode *in, int n=1);
   void close_dir(Dir *dir);
 
+  int subscribe_mdsmap();
+
   // same as unmount() but for when the client_lock is already held
   void _unmount();
 
@@ -595,7 +597,16 @@ protected:
    */
   void _finish_init();
 
+  list<Cond*> waiting_for_reclaim;
+  int reclaim_errno = 0;
+  epoch_t reclaim_osd_epoch = 0;
+  entity_addr_t reclaim_target_addr;
+
  public:
+  void set_uuid(const std::string& uuid);
+  int start_reclaim(const std::string& uuid, unsigned flags);
+  void finish_reclaim();
+
   void set_filer_flags(int flags);
   void clear_filer_flags(int flags);
 
