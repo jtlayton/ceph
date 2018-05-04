@@ -128,6 +128,8 @@ public:
   size_t apply_blacklist(const std::set<entity_addr_t> &blacklist);
   void journal_close_session(Session *session, int state, Context *on_safe);
 
+  set<client_t> client_reclaim_gather;
+  size_t get_num_pending_reclaim() const { return client_reclaim_gather.size(); }
   Session *find_session_by_uuid(const std::string& uuid);
   void reclaim_session(Session *session, MClientSession *m);
   void finish_reclaim_session(Session *session, MClientSession *reply=nullptr);
