@@ -10,10 +10,8 @@ ENV TERM linux
 # For the dashboard, if the rook images are pre-Mimic: ython-bcrypt librdmacm
 
 RUN (grep -q rhel /etc/os-release && ( \
-        yum install -y python-pip && \
         yum install -y liboath && \
-        yum install -y python-bcrypt librdmacm && \
-        pip install kubernetes==6.0.0 \
+        yum install -y python-bcrypt librdmacm \
     )) || (grep -q suse /etc/os-release && ( \
         zypper --non-interactive --gpg-auto-import-keys install --no-recommends --auto-agree-with-licenses --replacefiles --details \
             python3-kubernetes \
@@ -24,11 +22,11 @@ RUN (grep -q rhel /etc/os-release && ( \
             libopenssl1_1 \
     ))
 
-ADD bin.tar.gz /usr/bin/
-ADD lib.tar.gz /usr/lib64/
+# ADD bin.tar.gz /usr/bin/
+# ADD lib.tar.gz /usr/lib64/
 
 # Assume developer is using default paths (i.e. /usr/local), so
 # build binaries will be looking for libs there.
-ADD eclib.tar.gz /usr/local/lib64/ceph/erasure-code/
-ADD clslib.tar.gz /usr/local/lib64/rados-classes/
-ADD mgr_plugins.tar.gz /usr/local/lib64/ceph/mgr
+# ADD eclib.tar.gz /usr/local/lib64/ceph/erasure-code/
+# ADD clslib.tar.gz /usr/local/lib64/rados-classes/
+ADD mgr_plugins.tar.gz /usr/lib64/ceph/mgr
