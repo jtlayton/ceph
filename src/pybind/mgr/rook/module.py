@@ -2,6 +2,7 @@ import threading
 import functools
 import os
 import uuid
+import re
 
 from mgr_module import MgrModule
 
@@ -328,6 +329,39 @@ class RookOrchestrator(MgrModule, orchestrator.Orchestrator):
                 devs.append(dev)
 
             result.append(orchestrator.InventoryNode(node_name, devs))
+
+        return result
+
+    @deferred_read
+    def list_services(self, service_type):
+
+        assert service_type in ('mds', 'osd', 'mon', 'mgr', None), service_type + ' unsupported'
+
+        pods = self.rook_cluster.list_pods(service_type)
+
+        result = []
+        for p in pods:
+            sl = orchestrator.ServiceLocation()
+            sl.nodename = p['nodename']
+            sl.container_id = p['name']
+            sl.service_type = re.sub('rook-ceph-', '', p['labels']['app'])
+
+            if sl.service_type == 'osd':
+                sl.daemon_name = '%s' % p['labels']['ceph-osd-id']
+            elif sl.service_type == 'mds':
+                # MDS daemon names are the tail of the pod name with
+                # an 'm' prefix.
+                # TODO: Would be nice to get this out a label though.
+                sl.daemon_name = 'm' + sl.container_id.split("-")[-1]
+            elif sl.service_type == 'mon':
+                sl.daemon_name = p['labels']['mon']
+            elif sl.service_type == 'mgr':
+                sl.daemon_name = p['labels']['mgr']
+            else:
+                # Unknown type -- skip it
+                continue
+
+            result.append(sl)
 
         return result
 
