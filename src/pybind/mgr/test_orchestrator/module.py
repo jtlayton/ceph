@@ -5,6 +5,7 @@ import functools
 import uuid
 import psutil
 import socket
+import os
 from subprocess import check_output
 
 from mgr_module import MgrModule
@@ -252,6 +253,17 @@ class TestOrchestrator(MgrModule, orchestrator.Orchestrator):
                 result.append(sd)
 
         return result
+
+    def find_ceph_conf(self):
+        pid = os.getpid()
+        for p in psutil.process_iter(attrs=['pid','cmdline']):
+            if p.pid == pid:
+                break
+        cmdline = p.cmdline()
+        for i in range(len(cmdline)):
+            if cmdline[i] == '-c':
+                return cmdline[i + 1]
+        return None
 
     def add_stateless_service(self, service_type, spec):
         raise NotImplementedError(service_type)
