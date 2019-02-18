@@ -31,4 +31,4 @@ ADD lib.tar.gz /usr/lib64/
 # build binaries will be looking for libs there.
 ADD eclib.tar.gz /usr/local/lib64/ceph/erasure-code/
 ADD clslib.tar.gz /usr/local/lib64/rados-classes/
-ADD mgr_plugins.tar.gz /usr/local/lib64/ceph/mgr
+ADD mgr_plugins.tar.gz /usr/local/share/ceph/mgr
