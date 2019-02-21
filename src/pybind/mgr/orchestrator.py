@@ -565,8 +565,8 @@ class DriveGroupSpec(object):
     Describe a drive group in the same form that ceph-volume
     understands.
     """
-    def __init__(self, host_pattern, data_devices, objectstore='bluestore'):
-        # type: (str, DeviceSelection, str) -> ()
+    def __init__(self, host_pattern, data_devices, data_directories=None, objectstore='bluestore'):
+        # type: (str, DeviceSelection, Optional[DeviceSelection], str) -> ()
 
         # concept of applying a drive group to a (set) of hosts is tightly
         # linked to the drive group itself
@@ -576,6 +576,9 @@ class DriveGroupSpec(object):
 
         #: A :class:`orchestrator.DeviceSelection`
         self.data_devices = data_devices
+
+        #: A list of strings, containing paths which should back OSDs
+        self.data_directories = data_directories
 
         #: ``filestore`` or ``bluestore``
         self.objectstore = objectstore
