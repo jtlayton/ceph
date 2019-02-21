@@ -565,10 +565,8 @@ class DriveGroupSpec(object):
     Describe a drive group in the same form that ceph-volume
     understands.
     """
-    def __init__(self, host_pattern, data_devices, db_devices=None, wal_devices=None, journal_devices=None,
-                 osds_per_device=None, objectstore='bluestore', encrypted=False, db_slots=None,
-                 wal_slots=None):
-        # type: (str, DeviceSelection, Optional[DeviceSelection], Optional[DeviceSelection], Optional[DeviceSelection], int, str, bool, int, int) -> ()
+    def __init__(self, host_pattern, data_devices, objectstore='bluestore'):
+        # type: (str, DeviceSelection, str) -> ()
 
         # concept of applying a drive group to a (set) of hosts is tightly
         # linked to the drive group itself
@@ -579,36 +577,8 @@ class DriveGroupSpec(object):
         #: A :class:`orchestrator.DeviceSelection`
         self.data_devices = data_devices
 
-        #: A :class:`orchestrator.DeviceSelection`
-        self.db_devices = db_devices
-
-        #: A :class:`orchestrator.DeviceSelection`
-        self.wal_devices = wal_devices
-
-        #: A :class:`orchestrator.DeviceSelection`
-        self.journal_devices = journal_devices
-
-        #: Number of osd daemons per "DATA" device.
-        #: To fully utilize nvme devices multiple osds are required.
-        self.osds_per_device = osds_per_device
-
         #: ``filestore`` or ``bluestore``
         self.objectstore = objectstore
-
-        #: ``true`` or ``false``
-        self.encrypted = encrypted
-
-        #: How many OSDs per DB device
-        self.db_slots = db_slots
-
-        #: How many OSDs per WAL device
-        self.wal_slots = wal_slots
-
-        # FIXME: needs ceph-volume support
-        #: Optional: mapping of drive to OSD ID, used when the
-        #: created OSDs are meant to replace previous OSDs on
-        #: the same node.
-        self.osd_id_claims = {}
 
     @classmethod
     def from_json(self, json_drive_group):
@@ -618,7 +588,7 @@ class DriveGroupSpec(object):
         :param json_drive_group: A valid json string with a Drive Group
                specification
         """
-        args = {k: (DeviceSelection.from_json(v) if k.endswith('_devices') else v) for k, v in
+        args = {k: (DeviceSelection.from_json(v) if k == 'data_devices' else v) for k, v in
                 json_drive_group.items()}
         return DriveGroupSpec(**args)
 
@@ -629,9 +599,8 @@ class DriveGroupSpec(object):
         if not isinstance(self.host_pattern, six.string_types):
             raise DriveGroupValidationError('host_pattern must be of type string')
 
-        specs = [self.data_devices, self.db_devices, self.wal_devices, self.journal_devices]
-        for s in filter(None, specs):
-            s.validate()
+        if self.data_devices:
+            self.data_devices.validate()
         if self.objectstore not in ('filestore', 'bluestore'):
             raise DriveGroupValidationError("objectstore not in ('filestore', 'bluestore')")
         if not self.hosts(all_hosts):
