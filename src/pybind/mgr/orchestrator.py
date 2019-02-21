@@ -565,7 +565,7 @@ class DriveGroupSpec(object):
     Describe a drive group in the same form that ceph-volume
     understands.
     """
-    def __init__(self, host_pattern, data_devices, data_directories=None, objectstore='bluestore'):
+    def __init__(self, host_pattern, data_devices=None, data_directories=None, objectstore='bluestore'):
         # type: (str, DeviceSelection, Optional[DeviceSelection], str) -> ()
 
         # concept of applying a drive group to a (set) of hosts is tightly
