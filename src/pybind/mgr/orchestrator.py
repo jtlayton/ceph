@@ -323,6 +323,16 @@ class Orchestrator(object):
         """
         raise NotImplementedError()
 
+    def update_nfses(self, svc_id, num):
+        # type: (str, int) -> WriteCompletion
+        """
+        Update the number of NFS servers in a cluster.
+
+        :param svc_id: svc_id of the NFS cluster.
+        :param num: requested number of NFS servers.
+        """
+        raise NotImplementedError()
+
     def add_stateless_service(self, service_type, spec):
         # type: (str, StatelessServiceSpec) -> WriteCompletion
         """
