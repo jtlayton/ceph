@@ -400,6 +400,11 @@ class RookOrchestrator(MgrModule, orchestrator.Orchestrator):
             lambda: self.rook_cluster.update_mon_count(num), None,
             "Updating mon count to {0}".format(num))
 
+    def update_nfses(self, svc_id, num):
+        return RookWriteCompletion(
+            lambda: self.rook_cluster.update_nfs_count(svc_id, num), None,
+            "Updating NFS server count in {0} to {1}".format(svc_id, num))
+
     def create_osds(self, drive_group, all_hosts):
         # type: (orchestrator.DriveGroupSpec, List[str]) -> RookWriteCompletion
 
