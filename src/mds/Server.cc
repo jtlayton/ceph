@@ -4143,6 +4143,7 @@ void Server::handle_client_openc(MDRequestRef& mdr)
   // do the open
   Capability *cap = mds->locker->issue_new_caps(in, cmode, mdr->session, realm, req->is_replay());
   in->authlock.set_state(LOCK_EXCL);
+  in->linklock.set_state(LOCK_EXCL);
   in->xattrlock.set_state(LOCK_EXCL);
 
   if (cap && (cmode & CEPH_FILE_MODE_WR)) {
@@ -5717,6 +5718,7 @@ void Server::handle_client_mknod(MDRequestRef& mdr)
       // put locks in excl mode
       newi->filelock.set_state(LOCK_EXCL);
       newi->authlock.set_state(LOCK_EXCL);
+      newi->linklock.set_state(LOCK_EXCL);
       newi->xattrlock.set_state(LOCK_EXCL);
 
       dout(15) << " setting a client_range too, since this is a regular file" << dendl;
