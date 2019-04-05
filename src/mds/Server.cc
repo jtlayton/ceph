@@ -6635,9 +6635,25 @@ void Server::handle_client_unlink(MDRequestRef& mdr)
   for (int i=0; i<(int)trace.size()-1; i++)
     lov.add_rdlock(&trace[i]->lock);
   lov.add_xlock(&dn->lock);
-  lov.add_wrlock(&diri->filelock);
   lov.add_wrlock(&diri->nestlock);
-  lov.add_xlock(&in->linklock);
+
+
+  /*
+   * If the client issuing the unlink holds Fx caps, then we don't need the
+   * filelock. Just assume that it will update the link count accordingly.
+   */
+  Capability *cap = diri->get_client_cap(client);
+  if (!(cap->issued() & CEPH_CAP_FILE_EXCL))
+    lov.add_wrlock(&diri->filelock);
+
+  /*
+   * If the client issuing the unlink holds Lx caps, then we don't need the
+   * linklock. Just assume that it will update the link count accordingly.
+   */
+  cap = in->get_client_cap(client);
+  if (!(cap->issued() & CEPH_CAP_LINK_EXCL))
+    lov.add_xlock(&in->linklock);
+
   if (straydn) {
     lov.add_wrlock(&straydn->get_dir()->inode->filelock);
     lov.add_wrlock(&straydn->get_dir()->inode->nestlock);
