@@ -11,6 +11,7 @@ then deploying the needed services.
 Requirements
 ============
 
+- Python3
 - Systemd
 - Podman or Docker for running containers
 - Time synchronization (such as chrony or NTP)
